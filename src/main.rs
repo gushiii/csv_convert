@@ -8,7 +8,7 @@ use ratatui::{
     prelude::CrosstermBackend,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph},
+    widgets::{Block, Borders, Clear, Paragraph, Wrap},
 };
 use ratatui_explorer::FileExplorer;
 use std::error::Error;
@@ -28,6 +28,7 @@ enum AppState {
         src: PathBuf,
         format: &'static str,
     },
+    Error(String),
 }
 
 struct App {
@@ -117,6 +118,36 @@ fn ui(f: &mut Frame, app: &mut App) {
                 area,
             );
         }
+        AppState::Error(msg) => {
+            let area = centered_rect(50, 30, f.area());
+            f.render_widget(Clear, area);
+            let block = Block::default()
+                .title(" 错误 / Error ")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD));
+
+            let text = vec![
+                Line::from(Span::styled(
+                    "操作未能完成: ",
+                    Style::default().add_modifier(Modifier::ITALIC),
+                )),
+                Line::from(""),
+                Line::from(Span::raw(msg)), // 显示错误信息
+                Line::from(""),
+                Line::from(Span::styled(
+                    "按任意键返回",
+                    Style::default().fg(Color::DarkGray),
+                )),
+            ];
+
+            f.render_widget(
+                Paragraph::new(text)
+                    .block(block)
+                    .wrap(Wrap { trim: true })
+                    .alignment(Alignment::Center),
+                area,
+            );
+        }
         _ => {}
     }
 }
@@ -174,13 +205,12 @@ fn convert_csv(input_path: &Path, target_ext: &str) -> Result<String, Box<dyn Er
     Ok(output)
 }
 
-fn perform_save(dest: &PathBuf, src: &PathBuf, format: &str) {
-    if let Ok(content) = convert_csv(src, format) {
-        if std::fs::write(dest, content).is_ok() {
-            // TODO-成功保存
-            // app.status_msg = format!("Saved to {:?}", dest);
-        }
-    }
+// 执行转换并返回结果
+fn try_save(dest: &PathBuf, src: &PathBuf, format: &str) -> Result<(), String> {
+    let content = convert_csv(src, format).map_err(|e| format!("解析失败: {}", e))?;
+    std::fs::write(dest, content).map_err(|e| format!("写入失败: {}", e))?;
+
+    Ok(())
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -279,9 +309,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 format,
                             };
                         } else {
-                            // 文件不存在，直接执行转换
-                            perform_save(&dest, src, format);
-                            app.state = AppState::Browsing;
+                            // 尝试保存，失败则进入错误状态
+                            match try_save(&dest, src, format) {
+                                Ok(_) => app.state = AppState::Browsing,
+                                Err(e) => app.state = AppState::Error(e),
+                            }
                         }
                     }
                     KeyCode::Esc => app.state = AppState::Browsing,
@@ -292,10 +324,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 // 第四级: 确认覆盖逻辑
                 AppState::ConfirmingOverwrite { dest, src, format } => match key.code {
-                    KeyCode::Char('Y') | KeyCode::Char('y') => {
-                        perform_save(dest, src, format);
-                        app.state = AppState::Browsing;
-                    }
+                    KeyCode::Char('Y') | KeyCode::Char('y') => match try_save(&dest, src, format) {
+                        Ok(_) => app.state = AppState::Browsing,
+                        Err(e) => app.state = AppState::Error(e),
+                    },
                     KeyCode::Char('N') | KeyCode::Char('n') | KeyCode::Esc => {
                         // 用户选择不覆盖，返回命名状态
                         app.state = AppState::Naming {
@@ -305,6 +337,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     _ => {}
                 },
+
+                // 错误状态: 任何按键返回浏览状态
+                AppState::Error(_) => {
+                    app.state = AppState::Browsing;
+                }
             }
         }
     }
