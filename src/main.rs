@@ -4,10 +4,10 @@ use crossterm::event::{self, Event, KeyCode, read};
 
 use ratatui::{
     Frame, Terminal,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     prelude::CrosstermBackend,
-    style::{Color, Style},
-    text::Line,
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph},
 };
 use ratatui_explorer::FileExplorer;
@@ -19,7 +19,15 @@ use tui_input::{Input, backend::crossterm::EventHandler};
 enum AppState {
     Browsing,
     SelectingFormat(PathBuf),
-    Naming { src: PathBuf, format: &'static str },
+    Naming {
+        src: PathBuf,
+        format: &'static str,
+    },
+    ConfirmingOverwrite {
+        dest: PathBuf,
+        src: PathBuf,
+        format: &'static str,
+    },
 }
 
 struct App {
@@ -82,6 +90,33 @@ fn ui(f: &mut Frame, app: &mut App) {
             // 绘制光标
             f.set_cursor_position((area.x + app.input.visual_cursor() as u16 + 1, area.y + 1));
         }
+        AppState::ConfirmingOverwrite { dest, .. } => {
+            let area = centered_rect(40, 20, f.area());
+            f.render_widget(Clear, area);
+
+            let msg = vec![
+                Line::from(vec![
+                    Span::raw("文件 "),
+                    Span::styled(
+                        dest.file_name().unwrap().to_string_lossy(),
+                        Style::default().fg(Color::Red),
+                    ),
+                    Span::raw(" 已存在"),
+                ]),
+                Line::from("是否覆盖？ (y/n)"),
+            ];
+            let block = Block::default()
+                .title(" 确认覆盖 ")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD));
+
+            f.render_widget(
+                Paragraph::new(msg)
+                    .block(block)
+                    .alignment(Alignment::Center),
+                area,
+            );
+        }
         _ => {}
     }
 }
@@ -139,6 +174,15 @@ fn convert_csv(input_path: &Path, target_ext: &str) -> Result<String, Box<dyn Er
     Ok(output)
 }
 
+fn perform_save(dest: &PathBuf, src: &PathBuf, format: &str) {
+    if let Ok(content) = convert_csv(src, format) {
+        if std::fs::write(dest, content).is_ok() {
+            // TODO-成功保存
+            // app.status_msg = format!("Saved to {:?}", dest);
+        }
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 初始化终端
     crossterm::terminal::enable_raw_mode()?;
@@ -165,7 +209,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     KeyCode::Enter => {
                         if let Some(file) = app.explorer.files().get(app.explorer.selected_idx()) {
                             if file.is_file()
-                                && file.path().extension().map_or(false, |ext| ext == "csv") {
+                                && file.path().extension().map_or(false, |ext| ext == "csv")
+                            {
                                 app.state = AppState::SelectingFormat(file.path().to_path_buf());
                             }
                         }
@@ -226,17 +271,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 AppState::Naming { src, format } => match key.code {
                     KeyCode::Enter => {
                         let dest = src.with_file_name(app.input.value());
-
-                        // 执行定义的 convert_csv 逻辑
-                        if let Ok(content) = convert_csv(src, format) {
-                            std::fs::write(&dest, content).ok();
+                        if dest.exists() {
+                            // 如果目标文件已存在，进入确认覆盖状态
+                            app.state = AppState::ConfirmingOverwrite {
+                                dest,
+                                src: src.clone(),
+                                format,
+                            };
+                        } else {
+                            // 文件不存在，直接执行转换
+                            perform_save(&dest, src, format);
+                            app.state = AppState::Browsing;
                         }
-
-                        app.status_msg = format!("Saved to {:?}", dest);
-                        app.state = AppState::Browsing;
                     }
                     KeyCode::Esc => app.state = AppState::Browsing,
-                    _ => {app.input.handle_event(&event);}
+                    _ => {
+                        app.input.handle_event(&event);
+                    }
+                },
+
+                // 第四级: 确认覆盖逻辑
+                AppState::ConfirmingOverwrite { dest, src, format } => match key.code {
+                    KeyCode::Char('Y') | KeyCode::Char('y') => {
+                        perform_save(dest, src, format);
+                        app.state = AppState::Browsing;
+                    }
+                    KeyCode::Char('N') | KeyCode::Char('n') | KeyCode::Esc => {
+                        // 用户选择不覆盖，返回命名状态
+                        app.state = AppState::Naming {
+                            src: src.clone(),
+                            format,
+                        };
+                    }
+                    _ => {}
                 },
             }
         }
