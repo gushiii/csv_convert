@@ -24,6 +24,8 @@ toml = "0.8"
 # 实用工具
 anyhow = "1.0"            # 简化的错误处理
 nerd-font-symbols = "0.1"  # 图标支持（需配合 Nerd Font 使用）
+devicons = "0.6.12"
+dirs = "6.0.0"
 
 [profile.release]
 # 发布版本优化设置
