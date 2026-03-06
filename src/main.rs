@@ -285,6 +285,9 @@ fn convert_csv(input_path: &Path, target_ext: &str) -> Result<String, Box<dyn Er
 // 执行转换并返回结果
 fn try_save(dest: &PathBuf, src: &PathBuf, format: &str) -> Result<(), String> {
     let content = convert_csv(src, format).map_err(|e| format!("解析失败: {}", e))?;
+    if let Some(parent) = Path::new(dest).parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("创建文件夹失败: {}", e))?;
+    }
     std::fs::write(dest, content).map_err(|e| format!("写入失败: {}", e))?;
 
     Ok(())
