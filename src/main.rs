@@ -2,15 +2,17 @@ use std::path::PathBuf;
 
 use crossterm::event::{self, Event, KeyCode, read};
 
+use devicons::FileIcon;
 use ratatui::{
     Frame, Terminal,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     prelude::CrosstermBackend,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 use ratatui_explorer::FileExplorer;
+use ratatui_explorer::Input::*;
 use std::error::Error;
 use std::path::Path;
 use tui_input::{Input, backend::crossterm::EventHandler};
@@ -29,6 +31,7 @@ enum AppState {
         format: &'static str,
     },
     Error(String),
+    Info(String),
 }
 
 struct App {
@@ -44,24 +47,68 @@ impl App {
             explorer: FileExplorer::new().unwrap(),
             input: Input::default(),
             state: AppState::Browsing,
-            status_msg: "F: Select File | Q: Quit".into(),
+            status_msg: "F/[Enter]: Select File | Q: Quit | ↑/↓: Navigate".into(),
         }
     }
 }
 
 fn ui(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
-        .constraints([Constraint::Min(0), Constraint::Length(1)])
+        .constraints([Constraint::Min(0), Constraint::Length(2)])
         .split(f.area());
 
     // 基础层: 文件浏览器
-    f.render_widget(&app.explorer.widget(), chunks[0]);
+    // 1. 准备 ListItem (包含图标和颜色)
+    let items: Vec<ListItem> = app
+        .explorer
+        .files()
+        .iter()
+        .map(|file| {
+            // 1. 判断是否为“上一级目录”标记
+            if file.name() == "../" {
+                let line = Line::from(vec![
+                    Span::styled("↩ ".to_string(), Color::Yellow), // 使用返回图标
+                    Span::raw(".."),
+                ]);
+                return ListItem::new(line);
+            }
+
+            // 2. 正常处理其他文件和文件夹
+            let icon_data = FileIcon::from(file.path());
+            let icon_color = hex_to_color(icon_data.color);
+
+            let line = Line::from(vec![
+                Span::styled(format!("{} ", icon_data.icon), icon_color),
+                Span::raw(file.name()),
+            ]);
+
+            ListItem::new(line)
+        })
+        .collect();
+
+    // 2. 创建 Widget 并配置高亮样式
+    // 获取当前路径并转换为字符串
+    let current_path = format_path(app.explorer.cwd());
+    let list_widget = List::new(items)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(format!(" 📂 路径: {} ", current_path)) // 在这里显示路径
+                .title_alignment(Alignment::Left),
+        )
+        .highlight_symbol("➜ ")
+        .highlight_style(Style::default().bg(Color::Indexed(237))); // 使用 256 色中的深灰
+
+    // 3. 维护并渲染状态
+    let mut state = ListState::default();
+    state.select(Some(app.explorer.selected_idx()));
+
+    f.render_stateful_widget(list_widget, chunks[0], &mut state);
     f.render_widget(
         Paragraph::new(app.status_msg.as_str()).block(Block::new().borders(Borders::TOP)),
         chunks[1],
     );
 
-    // 弹出层处理
     match &app.state {
         AppState::SelectingFormat(_) => {
             let area = centered_rect(30, 20, f.area());
@@ -148,6 +195,36 @@ fn ui(f: &mut Frame, app: &mut App) {
                 area,
             );
         }
+        AppState::Info(msg) => {
+            let area = centered_rect(50, 30, f.area());
+            f.render_widget(Clear, area);
+            let block = Block::default()
+                .title(" 信息 / Info ")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD));
+
+            let text = vec![
+                Line::from(Span::styled(
+                    "打开文件失败: ",
+                    Style::default().add_modifier(Modifier::ITALIC),
+                )),
+                Line::from(""),
+                Line::from(Span::raw(msg)), // 显示信息
+                Line::from(""),
+                Line::from(Span::styled(
+                    "按任意键返回",
+                    Style::default().fg(Color::DarkGray),
+                )),
+            ];
+
+            f.render_widget(
+                Paragraph::new(text)
+                    .block(block)
+                    .wrap(Wrap { trim: true })
+                    .alignment(Alignment::Center),
+                area,
+            );
+        }
         _ => {}
     }
 }
@@ -213,6 +290,38 @@ fn try_save(dest: &PathBuf, src: &PathBuf, format: &str) -> Result<(), String> {
     Ok(())
 }
 
+// 辅助函数: 将十六进制颜色字符串转换为 ratatui 的 Color
+fn hex_to_color(hex: &str) -> Color {
+    // 移除可能的 # 前缀
+    let hex = hex.trim_start_matches('#');
+
+    if hex.len() != 6 {
+        return Color::White; // 格式错误时返回默认色
+    }
+
+    // 将十六进制字符串解析为 RGB 数值
+    if let Ok(rgb) = u32::from_str_radix(hex, 16) {
+        let r = ((rgb >> 16) & 0xFF) as u8;
+        let g = ((rgb >> 8) & 0xFF) as u8;
+        let b = (rgb & 0xFF) as u8;
+        Color::Rgb(r, g, b)
+    } else {
+        Color::White
+    }
+}
+
+// 辅助函数: 格式化路径，使用 ~ 代表 home 目录
+fn format_path(path: &std::path::Path) -> String {
+    let path_str = path.to_string_lossy();
+    if let Some(home) = dirs::home_dir() {
+        let home_str = home.to_string_lossy();
+        if path_str.starts_with(&*home_str) {
+            return path_str.replacen(&*home_str, "~", 1);
+        }
+    }
+    path_str.into_owned()
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 初始化终端
     crossterm::terminal::enable_raw_mode()?;
@@ -236,18 +345,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // 第一级: 浏览状态
                 AppState::Browsing => match key.code {
                     KeyCode::Char('q') => break,
-                    KeyCode::Enter => {
+                    KeyCode::Enter | KeyCode::Char('F') | KeyCode::Char('f') => {
                         if let Some(file) = app.explorer.files().get(app.explorer.selected_idx()) {
-                            if file.is_file()
-                                && file.path().extension().map_or(false, |ext| ext == "csv")
-                            {
-                                app.state = AppState::SelectingFormat(file.path().to_path_buf());
+                            if file.is_file() {
+                                if file.path().extension().map_or(false, |ext| ext == "csv") {
+                                    app.state =
+                                        AppState::SelectingFormat(file.path().to_path_buf());
+                                } else {
+                                    app.state = AppState::Info("请选择一个 CSV 文件".into());
+                                }
+                            } else if file.is_dir() {
+                                app.explorer.handle(Right)?;
                             }
                         }
                     }
-                    _ => {
-                        app.explorer.handle(&event)?;
-                    } // 使用内置处理器
+                    KeyCode::Down => app.explorer.handle(Down)?,
+                    KeyCode::Up => app.explorer.handle(Up)?,
+                    _ => {}
                 },
 
                 // 第二级: 选择格式
@@ -311,7 +425,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         } else {
                             // 尝试保存，失败则进入错误状态
                             match try_save(&dest, src, format) {
-                                Ok(_) => app.state = AppState::Browsing,
+                                Ok(_) => {
+                                    let path = app.explorer.cwd().to_path_buf();
+                                    app.explorer.set_cwd(path)?;
+                                    app.state = AppState::Browsing;
+                                }
                                 Err(e) => app.state = AppState::Error(e),
                             }
                         }
@@ -325,7 +443,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // 第四级: 确认覆盖逻辑
                 AppState::ConfirmingOverwrite { dest, src, format } => match key.code {
                     KeyCode::Char('Y') | KeyCode::Char('y') => match try_save(&dest, src, format) {
-                        Ok(_) => app.state = AppState::Browsing,
+                        Ok(_) => {
+                            let path = app.explorer.cwd().to_path_buf();
+                            app.explorer.set_cwd(path)?;
+                            app.state = AppState::Browsing;
+                        }
                         Err(e) => app.state = AppState::Error(e),
                     },
                     KeyCode::Char('N') | KeyCode::Char('n') | KeyCode::Esc => {
@@ -340,6 +462,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 // 错误状态: 任何按键返回浏览状态
                 AppState::Error(_) => {
+                    app.state = AppState::Browsing;
+                },
+
+                // 信息状态: 任何按键返回浏览状态
+                AppState::Info(_) => {
                     app.state = AppState::Browsing;
                 }
             }
