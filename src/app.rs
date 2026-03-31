@@ -29,7 +29,6 @@ pub enum AppState {
         format: String,
     },
     Error(String),
-    Info(String),
 }
 
 #[derive(Debug)]
@@ -70,10 +69,6 @@ impl App {
                     self.state = AppState::Browsing;
                     false
                 }
-                AppState::Info(_) => {
-                    self.state = AppState::Browsing;
-                    false
-                }
             };
             Ok(should_quit)
         } else {
@@ -92,8 +87,6 @@ impl App {
                     if file.is_file() {
                         if file.path().extension().map_or(false, |ext| ext == "csv") {
                             self.state = AppState::SelectingFormat(file.path().to_path_buf());
-                        } else {
-                            self.state = AppState::Info("请选择一个 CSV 文件".into());
                         }
                     } else if file.is_dir() {
                         self.explorer.handle(Right)?;
