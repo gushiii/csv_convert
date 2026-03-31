@@ -1,4 +1,4 @@
-use crossterm::event::read;
+use crossterm::event::{self, Event};
 use ratatui::{Terminal, prelude::CrosstermBackend};
 
 mod app;
@@ -15,9 +15,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     loop {
         terminal.draw(|f| ui::ui(f, &mut app))?;
-        let event = read()?;
-        if app.handle_event(&event)? {
-            break;
+        app.update_tick();
+        // let event = read()?;
+        // if app.handle_event(&event)? {
+        //     break;
+        // }
+
+        if event::poll(std::time::Duration::from_millis(50))? {
+            if let Event::Key(key) = event::read()? {
+                if app.handle_event(&Event::Key(key))? {
+                    break;
+                }
+            }
         }
     }
 

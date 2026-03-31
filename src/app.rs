@@ -4,6 +4,8 @@ use ratatui_explorer::FileExplorer;
 use ratatui_explorer::Input::*;
 use std::error::Error;
 use std::path::PathBuf;
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::thread;
 use tui_input::{Input, backend::crossterm::EventHandler};
 
 use crate::utils;
@@ -34,6 +36,9 @@ pub enum AppState {
 #[derive(Debug)]
 pub struct App {
     pub explorer: FileExplorer,
+    pub preview_cache: String,
+    pub preview_rx: Receiver<String>,
+    pub preview_tx: Sender<PathBuf>,
     pub input: Input,
     pub state: AppState,
     pub status_msg: String,
@@ -41,12 +46,43 @@ pub struct App {
 
 impl App {
     pub fn new() -> Result<Self, Box<dyn Error>> {
+        let (request_tx, request_rx) = mpsc::channel::<PathBuf>();
+        let (response_tx, response_rx) = mpsc::channel::<String>();
+
+        thread::spawn(move || {
+            while let Ok(path) = request_rx.recv() {
+                let content = if path.is_dir() {
+                    format!("目录: {}\n(选中以进入)", utils::format_path(&path))
+                } else {
+                    std::fs::read_to_string(&path)
+                        .map(|s| s.lines().take(100).collect::<Vec<_>>().join("\n"))
+                        .unwrap_or_else(|_| "无法读取该文件内容 (可能是二进制文件)".into())
+                };
+                let _ = response_tx.send(content);
+            }
+        });
+
         Ok(Self {
             explorer: FileExplorer::new()?,
+            preview_cache: "等待选择文件...".into(),
+            preview_rx: response_rx,
+            preview_tx: request_tx,
             input: Input::default(),
             state: AppState::Browsing,
             status_msg: STATUS_MSG_BROWSING.into(),
         })
+    }
+
+    pub fn update_tick(&mut self) {
+        while let Ok(content) = self.preview_rx.try_recv() {
+            self.preview_cache = content;
+        }
+    }
+
+    fn request_preview(&mut self) {
+        if let Some(file) = self.explorer.files().get(self.explorer.selected_idx()) {
+            let _ = self.preview_tx.send(file.path().to_path_buf());
+        }
     }
 
     pub fn handle_event(&mut self, event: &Event) -> Result<bool, Box<dyn Error>> {
@@ -90,16 +126,19 @@ impl App {
                         }
                     } else if file.is_dir() {
                         self.explorer.handle(Right)?;
+                        self.request_preview();
                     }
                 }
                 Ok(false)
             }
             KeyCode::Down => {
                 self.explorer.handle(Down)?;
+                self.request_preview();
                 Ok(false)
             }
             KeyCode::Up => {
                 self.explorer.handle(Up)?;
+                self.request_preview();
                 Ok(false)
             }
             _ => Ok(false),
