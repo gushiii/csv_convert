@@ -1,3 +1,4 @@
+use devicons::FileIcon;
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Layout, Rect},
@@ -5,11 +6,10 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
-use devicons::FileIcon;
 use std::path::PathBuf;
 
-use crate::utils;
 use crate::app::{App, AppState};
+use crate::utils;
 
 pub fn ui(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -22,30 +22,49 @@ pub fn ui(f: &mut Frame, app: &mut App) {
 }
 
 pub fn render_file_list(f: &mut Frame, app: &mut App, area: Rect) {
-    let items: Vec<ListItem> = app.explorer.files().iter().map(|file| {
-        if file.name() == "../" {
-            let line = Line::from(vec![
-                Span::styled("↩ ".to_string(), Color::Yellow),
-                Span::raw(".."),
-            ]);
-            ListItem::new(line)
-        } else {
-            let icon_data = FileIcon::from(file.path());
-            let icon_color = utils::hex_to_color(icon_data.color);
-            let line = Line::from(vec![
-                Span::styled(format!("{} ", icon_data.icon), icon_color),
-                Span::raw(file.name()),
-            ]);
-            ListItem::new(line)
-        }
-    }).collect();
+    let items: Vec<ListItem> = app
+        .explorer
+        .files()
+        .iter()
+        .map(|file| {
+            if file.name() == "../" {
+                let line = Line::from(vec![
+                    Span::styled("↩ ".to_string(), Color::Yellow),
+                    Span::raw(".."),
+                ]);
+                ListItem::new(line)
+            } else {
+                if file.is_dir() || file.path().extension().map_or(false, |ext| ext == "csv") {
+                    // 目录和 CSV 文件使用默认颜色
+                    let icon_data = FileIcon::from(file.path());
+                    let icon_color = utils::hex_to_color(icon_data.color);
+                    let line = Line::from(vec![
+                        Span::styled(format!("{} ", icon_data.icon), icon_color),
+                        Span::raw(file.name()),
+                    ]);
+                    ListItem::new(line)
+                } else {
+                    // 其他文件使用灰色显示
+                    let icon_data = FileIcon::from(file.path());
+                    let icon_color = utils::hex_to_color(icon_data.color);
+                    let line = Line::from(vec![
+                        Span::styled(format!("{} ", icon_data.icon), icon_color),
+                        Span::styled(file.name(), Color::DarkGray),
+                    ]);
+                    ListItem::new(line)
+                }
+            }
+        })
+        .collect();
 
     let current_path = utils::format_path(app.explorer.cwd());
     let list_widget = List::new(items)
-        .block(Block::default()
-            .borders(Borders::ALL)
-            .title(format!(" 📂 路径: {} ", current_path))
-            .title_alignment(Alignment::Left))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(format!(" 📂 路径: {} ", current_path))
+                .title_alignment(Alignment::Left),
+        )
         .highlight_symbol("➜ ")
         .highlight_style(Style::default().bg(Color::Indexed(237)));
 
@@ -67,7 +86,6 @@ pub fn render_overlay(f: &mut Frame, app: &mut App) {
         AppState::Naming { .. } => render_naming_input(f, app),
         AppState::ConfirmingOverwrite { dest, .. } => render_confirm_overwrite(f, dest),
         AppState::Error(msg) => render_error(f, msg),
-        AppState::Info(msg) => render_info(f, msg),
         _ => {}
     }
 }
@@ -106,7 +124,10 @@ pub fn render_confirm_overwrite(f: &mut Frame, dest: &PathBuf) {
     let msg = vec![
         Line::from(vec![
             Span::raw("文件 "),
-            Span::styled(dest.file_name().unwrap().to_string_lossy(), Style::default().fg(Color::Red)),
+            Span::styled(
+                dest.file_name().unwrap().to_string_lossy(),
+                Style::default().fg(Color::Red),
+            ),
             Span::raw(" 已存在"),
         ]),
         Line::from("是否覆盖？ (y/n)"),
@@ -115,7 +136,12 @@ pub fn render_confirm_overwrite(f: &mut Frame, dest: &PathBuf) {
         .title(" 确认覆盖 ")
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD));
-    f.render_widget(Paragraph::new(msg).block(block).alignment(Alignment::Center), area);
+    f.render_widget(
+        Paragraph::new(msg)
+            .block(block)
+            .alignment(Alignment::Center),
+        area,
+    );
 }
 
 pub fn render_error(f: &mut Frame, msg: &str) {
@@ -126,28 +152,23 @@ pub fn render_error(f: &mut Frame, msg: &str) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD));
     let text = vec![
-        Line::from(Span::styled("操作未能完成: ", Style::default().add_modifier(Modifier::ITALIC))),
+        Line::from(Span::styled(
+            "操作未能完成: ",
+            Style::default().add_modifier(Modifier::ITALIC),
+        )),
         Line::from(""),
         Line::from(Span::raw(msg)),
         Line::from(""),
-        Line::from(Span::styled("按任意键返回", Style::default().fg(Color::DarkGray))),
+        Line::from(Span::styled(
+            "按任意键返回",
+            Style::default().fg(Color::DarkGray),
+        )),
     ];
-    f.render_widget(Paragraph::new(text).block(block).wrap(Wrap { trim: true }).alignment(Alignment::Center), area);
-}
-
-pub fn render_info(f: &mut Frame, msg: &str) {
-    let area = utils::centered_rect(50, 30, f.area());
-    f.render_widget(Clear, area);
-    let block = Block::default()
-        .title(" 信息 / Info ")
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD));
-    let text = vec![
-        Line::from(Span::styled("打开文件失败: ", Style::default().add_modifier(Modifier::ITALIC))),
-        Line::from(""),
-        Line::from(Span::raw(msg)),
-        Line::from(""),
-        Line::from(Span::styled("按任意键返回", Style::default().fg(Color::DarkGray))),
-    ];
-    f.render_widget(Paragraph::new(text).block(block).wrap(Wrap { trim: true }).alignment(Alignment::Center), area);
+    f.render_widget(
+        Paragraph::new(text)
+            .block(block)
+            .wrap(Wrap { trim: true })
+            .alignment(Alignment::Center),
+        area,
+    );
 }
