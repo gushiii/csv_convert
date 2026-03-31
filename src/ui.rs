@@ -1,23 +1,36 @@
+use crate::app::{App, AppState};
+use crate::utils;
 use devicons::FileIcon;
 use ratatui::{
     Frame,
-    layout::{Alignment, Constraint, Layout, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 use std::path::PathBuf;
 
-use crate::app::{App, AppState};
-use crate::utils;
-
 pub fn ui(f: &mut Frame, app: &mut App) {
-    let chunks = Layout::default()
+    // 1. 垂直布局：主内容区 + 底部状态栏
+    let main_chunks = Layout::default()
         .constraints([Constraint::Min(0), Constraint::Length(2)])
         .split(f.area());
 
-    render_file_list(f, app, chunks[0]);
-    render_status_bar(f, app, chunks[1]);
+    // 2. 水平布局：左侧文件列表 + 右侧预览窗格
+    let body_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(20), // 列表宽度
+            Constraint::Percentage(80), // 预览宽度
+        ])
+        .split(main_chunks[0]);
+
+    // 渲染各个组件
+    render_file_list(f, app, body_chunks[0]);
+    render_preview(f, app, body_chunks[1]); // 新增预览渲染
+    render_status_bar(f, app, main_chunks[1]);
+
+    // 渲染悬浮层（如命名输入、错误提示等）
     render_overlay(f, app);
 }
 
@@ -34,25 +47,24 @@ pub fn render_file_list(f: &mut Frame, app: &mut App, area: Rect) {
                 ]);
                 ListItem::new(line)
             } else {
-                if file.is_dir() || file.path().extension().map_or(false, |ext| ext == "csv") {
-                    // 目录和 CSV 文件使用默认颜色
-                    let icon_data = FileIcon::from(file.path());
-                    let icon_color = utils::hex_to_color(icon_data.color);
-                    let line = Line::from(vec![
-                        Span::styled(format!("{} ", icon_data.icon), icon_color),
-                        Span::raw(file.name()),
-                    ]);
-                    ListItem::new(line)
+                let icon_data = FileIcon::from(file.path());
+                let icon_color = utils::hex_to_color(icon_data.color);
+
+                // 判断是否为高亮文件 (目录或 CSV)
+                let is_highlight =
+                    file.is_dir() || file.path().extension().map_or(false, |ext| ext == "csv");
+
+                let text_style = if is_highlight {
+                    Style::default()
                 } else {
-                    // 其他文件使用灰色显示
-                    let icon_data = FileIcon::from(file.path());
-                    let icon_color = utils::hex_to_color(icon_data.color);
-                    let line = Line::from(vec![
-                        Span::styled(format!("{} ", icon_data.icon), icon_color),
-                        Span::styled(file.name(), Color::DarkGray),
-                    ]);
-                    ListItem::new(line)
-                }
+                    Style::default().fg(Color::DarkGray)
+                };
+
+                let line = Line::from(vec![
+                    Span::styled(format!("{} ", icon_data.icon), icon_color),
+                    Span::styled(file.name(), text_style),
+                ]);
+                ListItem::new(line)
             }
         })
         .collect();
@@ -66,11 +78,39 @@ pub fn render_file_list(f: &mut Frame, app: &mut App, area: Rect) {
                 .title_alignment(Alignment::Left),
         )
         .highlight_symbol("➜ ")
-        .highlight_style(Style::default().bg(Color::Indexed(237)));
+        .highlight_style(
+            Style::default()
+                .bg(Color::Indexed(237))
+                .add_modifier(Modifier::BOLD),
+        );
 
+    // 注意：建议在 App 中维护这个 state 以保持滚动位置
     let mut state = ListState::default();
     state.select(Some(app.explorer.selected_idx()));
     f.render_stateful_widget(list_widget, area, &mut state);
+}
+
+/// 新增：渲染预览窗格
+pub fn render_preview(f: &mut Frame, app: &mut App, area: Rect) {
+    // 从 app 中获取异步加载好的预览文本
+    // 如果正在加载或为空，可以显示提示
+    let preview_text = if app.preview_cache.is_empty() {
+        "\n  正在加载或无法预览该文件..."
+    } else {
+        &app.preview_cache
+    };
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(" 📝 预览 / Preview ")
+        .border_style(Style::default().fg(Color::Indexed(244))); // 灰色边框，区分主列表
+
+    let p = Paragraph::new(preview_text)
+        .block(block)
+        .wrap(Wrap { trim: false }) // 文件内容通常不希望修剪空格
+        .alignment(Alignment::Left);
+
+    f.render_widget(p, area);
 }
 
 pub fn render_status_bar(f: &mut Frame, app: &mut App, area: Rect) {
