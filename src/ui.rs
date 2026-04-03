@@ -94,21 +94,51 @@ pub fn render_file_list(f: &mut Frame, app: &mut App, area: Rect) {
 pub fn render_preview(f: &mut Frame, app: &mut App, area: Rect) {
     // 从 app 中获取异步加载好的预览文本
     // 如果正在加载或为空，可以显示提示
-    let preview_text = if app.preview_cache.is_empty() {
-        "\n  正在加载或无法预览该文件..."
+    let preview_content = if app.preview_cache.is_empty() {
+        vec![Line::from("  正在加载或无法预览该文件...")]
     } else {
-        &app.preview_cache
+        // 获取当前选中文件的路径来进行语法高亮
+        let highlighted_lines = if let Some(file) = app
+            .explorer
+            .files()
+            .get(app.explorer.selected_idx())
+        {
+            if file.is_file() {
+                utils::highlight_code(&app.preview_cache, file.path())
+            } else {
+                // 目录或其他特殊文件，不应用高亮
+                app.preview_cache
+                    .lines()
+                    .map(|line| Line::from(line.to_string()))
+                    .collect()
+            }
+        } else {
+            app.preview_cache
+                .lines()
+                .map(|line| Line::from(line.to_string()))
+                .collect()
+        };
+        highlighted_lines
     };
+
+    let total_lines = preview_content.len();
+    let view_height = area.height.saturating_sub(2) as usize;
+    let max_scroll = total_lines.saturating_sub(view_height);
+
+    if app.preview_scroll as usize > max_scroll {
+        app.preview_scroll = max_scroll as u16;
+    }
 
     let block = Block::default()
         .borders(Borders::ALL)
         .title(" 📝 预览 / Preview ")
         .border_style(Style::default().fg(Color::Indexed(244))); // 灰色边框，区分主列表
 
-    let p = Paragraph::new(preview_text)
+    let p = Paragraph::new(preview_content)
         .block(block)
         .wrap(Wrap { trim: false }) // 文件内容通常不希望修剪空格
-        .alignment(Alignment::Left);
+        .alignment(Alignment::Left)
+        .scroll((app.preview_scroll, 0));
 
     f.render_widget(p, area);
 }
