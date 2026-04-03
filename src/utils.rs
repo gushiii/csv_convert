@@ -146,7 +146,7 @@ pub fn convert_csv(input_path: &Path, target_ext: &str) -> Result<String, Box<dy
 /// dest: 目标文件路径
 /// src: 源文件路径
 /// format: 目标格式（json、yaml、toml）
-pub fn try_save(dest: &PathBuf, src: &PathBuf, format: &str) -> Result<(), String> {
+pub fn try_save(dest: &PathBuf, src: &Path, format: &str) -> Result<(), String> {
     let content = convert_csv(src, format).map_err(|e| format!("解析失败: {}", e))?;
     if let Some(parent) = Path::new(dest).parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("创建文件夹失败: {}", e))?;
@@ -224,7 +224,7 @@ pub fn read_file_limited(path: &Path, max_size: u64) -> Result<String, Box<dyn E
     // 对于小文件，使用传统读取
     if read_size <= 64 * 1024 {
         // 预分配并清空缓冲区，确保内存被正确管理
-        let mut buffer = Vec::with_capacity(read_size as usize);
+        let mut buffer = vec![0; read_size as usize];
         buffer.resize(read_size as usize, 0);
         buffer.clear(); // 清空以确保干净的状态
         buffer.resize(read_size as usize, 0);
@@ -243,11 +243,7 @@ pub fn read_file_limited(path: &Path, max_size: u64) -> Result<String, Box<dyn E
     }
 
     // 对于大文件，使用内存映射
-    let mmap = unsafe {
-        MmapOptions::new()
-            .len(read_size as usize)
-            .map(&file)?
-    };
+    let mmap = unsafe { MmapOptions::new().len(read_size as usize).map(&file)? };
 
     let result = validate_and_convert_to_string(&mmap);
 
@@ -261,15 +257,22 @@ pub fn read_file_limited(path: &Path, max_size: u64) -> Result<String, Box<dyn E
 /// 改进的二进制文件检测：检查控制字符比例和可打印字符比例
 fn validate_and_convert_to_string(data: &[u8]) -> Result<String, Box<dyn Error>> {
     // 快速检查：包含空字节的一定是二进制文件
-    if data.iter().any(|&b| b == 0) {
+    if data.contains(&0) {
         return Err("(可能是二进制文件)".into());
     }
 
     // 计算可打印字符比例
-    let printable_count = data.iter().filter(|&&b| {
-        b.is_ascii_alphanumeric() || b.is_ascii_whitespace() || 
-        b.is_ascii_punctuation() || b == b'\n' || b == b'\r' || b == b'\t'
-    }).count();
+    let printable_count = data
+        .iter()
+        .filter(|&&b| {
+            b.is_ascii_alphanumeric()
+                || b.is_ascii_whitespace()
+                || b.is_ascii_punctuation()
+                || b == b'\n'
+                || b == b'\r'
+                || b == b'\t'
+        })
+        .count();
 
     let printable_ratio = printable_count as f64 / data.len() as f64;
 
@@ -279,10 +282,8 @@ fn validate_and_convert_to_string(data: &[u8]) -> Result<String, Box<dyn Error>>
     }
 
     // 尝试转换为UTF-8
-    String::from_utf8(data.to_vec())
-        .map_err(|_| "文件包含无效的 UTF-8 字符".into())
+    String::from_utf8(data.to_vec()).map_err(|_| "文件包含无效的 UTF-8 字符".into())
 }
-
 
 /// 对源代码进行语法高亮
 /// content: 源代码内容
@@ -290,10 +291,10 @@ fn validate_and_convert_to_string(data: &[u8]) -> Result<String, Box<dyn Error>>
 /// 返回 ratatui Line 向量
 pub fn highlight_code(content: &str, file_path: &Path) -> Vec<Line<'static>> {
     // 特殊处理CSV文件：渲染为表格格式
-    if let Some(ext) = file_path.extension() {
-        if ext == "csv" {
-            return render_csv_as_table(content);
-        }
+    if let Some(ext) = file_path.extension()
+        && ext == "csv"
+    {
+        return render_csv_as_table(content);
     }
 
     let ps = get_syntax_set();
@@ -355,7 +356,10 @@ pub fn render_csv_as_table(content: &str) -> Vec<Line<'static>> {
         Ok((csv, h)) => (csv, h),
         Err(_) => {
             // 如果无法解析表头，回退到原始文本显示
-            return content.lines().map(|line| Line::from(line.to_string())).collect();
+            return content
+                .lines()
+                .map(|line| Line::from(line.to_string()))
+                .collect();
         }
     };
 
@@ -378,7 +382,8 @@ pub fn render_csv_as_table(content: &str) -> Vec<Line<'static>> {
     // 读取所有记录，限制最多显示50行
     let mut records = Vec::new();
     for (i, result) in reader.records().enumerate() {
-        if i >= 50 { // 限制显示行数
+        if i >= 50 {
+            // 限制显示行数
             break;
         }
         if let Ok(record) = result {
@@ -418,7 +423,12 @@ pub fn render_csv_as_table(content: &str) -> Vec<Line<'static>> {
     header_line.push(Span::styled("┌", border_color));
     for (i, (header, &width)) in headers.iter().zip(&column_widths).enumerate() {
         let padded_header = format!(" {:<width$} ", header, width = width);
-        header_line.push(Span::styled(padded_header, Style::default().fg(header_color).add_modifier(Modifier::BOLD)));
+        header_line.push(Span::styled(
+            padded_header,
+            Style::default()
+                .fg(header_color)
+                .add_modifier(Modifier::BOLD),
+        ));
         if i < headers.len() - 1 {
             header_line.push(Span::styled("│", border_color));
         }
@@ -494,7 +504,10 @@ pub fn render_csv_as_table(content: &str) -> Vec<Line<'static>> {
     let total_rows = records.len();
     let total_cols = headers.len();
     lines.push(Line::from(""));
-    lines.push(Line::from(format!("📊 表格信息: {} 行 × {} 列", total_rows, total_cols)));
+    lines.push(Line::from(format!(
+        "📊 表格信息: {} 行 × {} 列",
+        total_rows, total_cols
+    )));
 
     // 如果记录被截断，显示提示
     if records.len() >= 50 {

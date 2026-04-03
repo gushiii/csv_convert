@@ -163,7 +163,7 @@ impl App {
             KeyCode::Enter | KeyCode::Char('F') | KeyCode::Char('f') => {
                 if let Some(file) = self.explorer.files().get(self.explorer.selected_idx()) {
                     if file.is_file() {
-                        if file.path().extension().map_or(false, |ext| ext == "csv") {
+                        if file.path().extension().is_some_and(|ext| ext == "csv") {
                             self.state = AppState::SelectingFormat(file.path().to_path_buf());
                         }
                     } else if file.is_dir() {
