@@ -1,7 +1,7 @@
 use crossterm::event;
 use crossterm::event::{Event, KeyCode};
 use ratatui_explorer::FileExplorer;
-use ratatui_explorer::Input::*;
+use ratatui_explorer::Input::{Down, Right, Up};
 use std::error::Error;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -11,7 +11,8 @@ use tui_input::{Input, backend::crossterm::EventHandler};
 use crate::utils;
 
 // --- 常量定义 ---
-const STATUS_MSG_BROWSING: &str = "F/[Enter]: Select File | Q: Quit | ↑/↓: Navigate | J/K/[Home]/[End]: Preview Scroll";
+const STATUS_MSG_BROWSING: &str =
+    "F/[Enter]: Select File | Q: Quit | ↑/↓: Navigate | J/K/[Home]/[End]: Preview Scroll";
 const FORMAT_JSON: &str = "json";
 const FORMAT_YAML: &str = "yaml";
 const FORMAT_TOML: &str = "toml";
@@ -38,8 +39,11 @@ pub struct App {
     pub explorer: FileExplorer,
     pub preview_cache: String,
     pub preview_scroll: u16,
-    pub preview_rx: Receiver<String>,
-    pub preview_tx: Sender<PathBuf>,
+    pub preview_path: Option<PathBuf>, // 缓存当前预览的文件路径
+    pub preview_request_id: u64, // 当前预览请求的ID
+    pub preview_cache_valid: bool, // 缓存内容是否有效
+    pub preview_rx: Receiver<(u64, String)>, // 接收 (request_id, content)
+    pub preview_tx: Sender<(u64, PathBuf)>, // 发送 (request_id, path)
     pub input: Input,
     pub state: AppState,
     pub status_msg: String,
@@ -47,19 +51,36 @@ pub struct App {
 
 impl App {
     pub fn new() -> Result<Self, Box<dyn Error>> {
-        let (request_tx, request_rx) = mpsc::channel::<PathBuf>();
-        let (response_tx, response_rx) = mpsc::channel::<String>();
+        let (request_tx, request_rx) = mpsc::channel::<(u64, PathBuf)>();
+        let (response_tx, response_rx) = mpsc::channel::<(u64, String)>();
 
+        // 主预览线程
         thread::spawn(move || {
-            while let Ok(path) = request_rx.recv() {
+            while let Ok((request_id, path)) = request_rx.recv() {
                 let content = if path.is_dir() {
                     format!("目录: {}\n(选中以进入)", utils::format_path(&path))
                 } else {
-                    std::fs::read_to_string(&path)
-                        .map(|s| s.lines().collect::<Vec<_>>().join("\n"))
-                        .unwrap_or_else(|_| "无法读取该文件内容 (可能是二进制文件)".into())
+                    // 限制文件大小：最多 100KB
+                    const MAX_SIZE: u64 = 100 * 1024;
+                    match std::fs::metadata(&path) {
+                        Ok(metadata) if metadata.len() > MAX_SIZE => {
+                            // 文件过大时，读取前 100KB 并添加提示
+                            match utils::read_file_limited(&path, MAX_SIZE) {
+                                Ok(content) => {
+                                    format!(
+                                        "文件过大 ({:.1}MB)，仅显示前 100KB\n\n{}",
+                                        metadata.len() as f64 / 1024.0 / 1024.0,
+                                        content
+                                    )
+                                }
+                                Err(e) => format!("无法读取文件: {}", e),
+                            }
+                        }
+                        _ => utils::read_file_limited(&path, MAX_SIZE)
+                            .unwrap_or_else(|e| format!("无法读取文件: {}", e)),
+                    }
                 };
-                let _ = response_tx.send(content);
+                let _ = response_tx.send((request_id, content));
             }
         });
 
@@ -67,6 +88,9 @@ impl App {
             explorer: FileExplorer::new()?,
             preview_cache: "等待选择文件...".into(),
             preview_scroll: 0,
+            preview_path: None,
+            preview_request_id: 0,
+            preview_cache_valid: false,
             preview_rx: response_rx,
             preview_tx: request_tx,
             input: Input::default(),
@@ -76,15 +100,30 @@ impl App {
     }
 
     pub fn update_tick(&mut self) {
-        while let Ok(content) = self.preview_rx.try_recv() {
-            self.preview_cache = content;
+        while let Ok((request_id, content)) = self.preview_rx.try_recv() {
+            // 只接受当前请求ID的响应，忽略过时的响应
+            if request_id == self.preview_request_id {
+                self.preview_cache = content;
+                self.preview_cache_valid = true;
+            }
         }
     }
 
     fn request_preview(&mut self) {
         if let Some(file) = self.explorer.files().get(self.explorer.selected_idx()) {
-            self.preview_scroll = 0;
-            let _ = self.preview_tx.send(file.path().to_path_buf());
+            let path = file.path().to_path_buf();
+            // 只有当文件路径改变时才重新请求
+            if self.preview_path.as_ref() != Some(&path) {
+                // 清空旧的预览缓存和滚动位置
+                self.preview_cache.clear();
+                self.preview_scroll = 0;
+                self.preview_path = Some(path.clone());
+                self.preview_cache_valid = false; // 标记缓存无效
+
+                // 递增请求ID，确保响应的一致性
+                self.preview_request_id = self.preview_request_id.wrapping_add(1);
+                let _ = self.preview_tx.send((self.preview_request_id, path));
+            }
         }
     }
 
@@ -138,7 +177,7 @@ impl App {
                 self.preview_scroll = self.preview_scroll.saturating_add(5);
                 Ok(false)
             }
-            KeyCode::PageUp  | KeyCode::Char('j') => {
+            KeyCode::PageUp | KeyCode::Char('j') => {
                 self.preview_scroll = self.preview_scroll.saturating_sub(5);
                 Ok(false)
             }
