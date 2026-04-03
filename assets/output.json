@@ -1,0 +1,191 @@
+[
+  {
+    "Position": "Goalkeeper",
+    "Nationality": "Poland",
+    "DOB": "Apr 18,1990 (29)",
+    "Name": "Wojciech Szczesny",
+    "KitNumber": 1
+  },
+  {
+    "Name": "Mattia Perin",
+    "Position": "Goalkeeper",
+    "DOB": "Nov 10,1992 (26)",
+    "Nationality": "Italy",
+    "KitNumber": 37
+  },
+  {
+    "Nationality": "Italy",
+    "DOB": "Jan 28,1978 (41)",
+    "Name": "Gianluigi Buffon",
+    "KitNumber": 77,
+    "Position": "Goalkeeper"
+  },
+  {
+    "DOB": "Mar 16,1990 (29)",
+    "Nationality": "Italy",
+    "KitNumber": 31,
+    "Name": "Carlo Pinsoglio",
+    "Position": "Goalkeeper"
+  },
+  {
+    "KitNumber": 4,
+    "Name": "Matthijs de Ligt",
+    "Position": "Centre-Back",
+    "Nationality": "Netherlands",
+    "DOB": "Aug 12,1999 (20)"
+  },
+  {
+    "KitNumber": 19,
+    "Name": "Leonardo Bonucci",
+    "Position": "Centre-Back",
+    "Nationality": "Italy",
+    "DOB": "May 1,1987 (32)"
+  },
+  {
+    "Position": "Centre-Back",
+    "DOB": "Jul 29,1994 (25)",
+    "Nationality": "Italy",
+    "Name": "Daniele Rugani",
+    "KitNumber": 24
+  },
+  {
+    "Name": "Merih Demiral",
+    "KitNumber": 28,
+    "Nationality": "Turkey",
+    "Position": "Centre-Back",
+    "DOB": "Mar 5,1998 (21)"
+  },
+  {
+    "Nationality": "Italy",
+    "Name": "Giorgio Chiellini",
+    "Position": "Centre-Back",
+    "DOB": "Aug 14,1984 (35)",
+    "KitNumber": 3
+  },
+  {
+    "Position": "Left-Back",
+    "Name": "Alex Sandro",
+    "Nationality": "Brazil",
+    "KitNumber": 12,
+    "DOB": "Jan 26,1991 (28)"
+  },
+  {
+    "Position": "Right-Back",
+    "Nationality": "Brazil",
+    "KitNumber": 13,
+    "Name": "Danilo",
+    "DOB": "Jul 15,1991 (28)"
+  },
+  {
+    "Position": "Right-Back",
+    "DOB": "Oct 20,1992 (27)",
+    "KitNumber": 2,
+    "Name": "Mattia De Sciglio",
+    "Nationality": "Italy"
+  },
+  {
+    "Position": "Defensive Midfield",
+    "Nationality": "Germany",
+    "KitNumber": 23,
+    "Name": "Emre Can",
+    "DOB": "Jan 12,1994 (25)"
+  },
+  {
+    "Nationality": "Bosnia-Herzegovina",
+    "KitNumber": 5,
+    "Name": "Miralem Pjanic",
+    "DOB": "Apr 2,1990 (29)",
+    "Position": "Central Midfield"
+  },
+  {
+    "DOB": "Dec 26,1990 (28)",
+    "Position": "Central Midfield",
+    "Name": "Aaron Ramsey",
+    "KitNumber": 8,
+    "Nationality": "Wales"
+  },
+  {
+    "Nationality": "France",
+    "KitNumber": 25,
+    "Name": "Adrien Rabiot",
+    "Position": "Central Midfield",
+    "DOB": "Apr 3,1995 (24)"
+  },
+  {
+    "DOB": "Jun 25,1997 (22)",
+    "Nationality": "Uruguay",
+    "Position": "Central Midfield",
+    "Name": "Rodrigo Bentancur",
+    "KitNumber": 30
+  },
+  {
+    "Name": "Blaise Matuidi",
+    "DOB": "Apr 9,1987 (32)",
+    "Position": "Central Midfield",
+    "KitNumber": 14,
+    "Nationality": "France"
+  },
+  {
+    "Name": "Sami Khedira",
+    "KitNumber": 6,
+    "Position": "Central Midfield",
+    "DOB": "Apr 4,1987 (32)",
+    "Nationality": "Germany"
+  },
+  {
+    "Name": "Cristiano Ronaldo",
+    "KitNumber": 7,
+    "Position": "Left Winger",
+    "DOB": "Feb 5,1985 (34)",
+    "Nationality": "Portugal"
+  },
+  {
+    "Position": "Left Winger",
+    "Name": "Marko Pjaca",
+    "DOB": "May 6,1995 (24)",
+    "Nationality": "Croatia",
+    "KitNumber": 15
+  },
+  {
+    "Position": "Right Winger",
+    "KitNumber": 33,
+    "Nationality": "Italy",
+    "DOB": "Feb 16,1994 (25)",
+    "Name": "Federico Bernardeschi"
+  },
+  {
+    "Name": "Douglas Costa",
+    "Position": "Right Winger",
+    "KitNumber": 11,
+    "DOB": "Sep 14,1990 (29)",
+    "Nationality": "Brazil"
+  },
+  {
+    "DOB": "May 26,1988 (31)",
+    "Nationality": "Colombia",
+    "Name": "Juan Cuadrado",
+    "KitNumber": 16,
+    "Position": "Right Winger"
+  },
+  {
+    "Name": "Paulo Dybala",
+    "KitNumber": 10,
+    "Nationality": "Argentina",
+    "DOB": "Nov 15,1993 (25)",
+    "Position": "Second Striker"
+  },
+  {
+    "Name": "Gonzalo Higuaín",
+    "KitNumber": 21,
+    "DOB": "Dec 10,1987 (31)",
+    "Position": "Centre-Forward",
+    "Nationality": "Argentina"
+  },
+  {
+    "Position": "Centre-Forward",
+    "KitNumber": 17,
+    "Name": "Mario Mandzukic",
+    "DOB": "May 21,1986 (33)",
+    "Nationality": "Croatia"
+  }
+]

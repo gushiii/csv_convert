@@ -111,7 +111,7 @@ impl App {
 
     fn request_preview(&mut self) {
         if let Some(file) = self.explorer.files().get(self.explorer.selected_idx()) {
-            let path = file.path().to_path_buf();
+            let path = file.path.to_path_buf();
             // 只有当文件路径改变时才重新请求
             if self.preview_path.as_ref() != Some(&path) {
                 // 清空旧的预览缓存和滚动位置
@@ -163,10 +163,10 @@ impl App {
             KeyCode::Enter | KeyCode::Char('F') | KeyCode::Char('f') => {
                 if let Some(file) = self.explorer.files().get(self.explorer.selected_idx()) {
                     if file.is_file() {
-                        if file.path().extension().is_some_and(|ext| ext == "csv") {
-                            self.state = AppState::SelectingFormat(file.path().to_path_buf());
+                        if file.path.extension().is_some_and(|ext| ext == "csv") {
+                            self.state = AppState::SelectingFormat(file.path.to_path_buf());
                         }
-                    } else if file.is_dir() {
+                    } else if file.is_dir {
                         self.explorer.handle(Right)?;
                         self.request_preview();
                     }
@@ -174,11 +174,11 @@ impl App {
                 Ok(false)
             }
             KeyCode::PageDown | KeyCode::Char('k') => {
-                self.preview_scroll = self.preview_scroll.saturating_add(5);
+                self.preview_scroll = self.preview_scroll.saturating_add(1);
                 Ok(false)
             }
             KeyCode::PageUp | KeyCode::Char('j') => {
-                self.preview_scroll = self.preview_scroll.saturating_sub(5);
+                self.preview_scroll = self.preview_scroll.saturating_sub(1);
                 Ok(false)
             }
             KeyCode::Home => {

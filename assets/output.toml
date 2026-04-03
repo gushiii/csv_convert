@@ -1,0 +1,188 @@
+[[rows]]
+DOB = "Apr 18,1990 (29)"
+KitNumber = 1
+Name = "Wojciech Szczesny"
+Nationality = "Poland"
+Position = "Goalkeeper"
+
+[[rows]]
+DOB = "Nov 10,1992 (26)"
+KitNumber = 37
+Name = "Mattia Perin"
+Nationality = "Italy"
+Position = "Goalkeeper"
+
+[[rows]]
+DOB = "Jan 28,1978 (41)"
+KitNumber = 77
+Name = "Gianluigi Buffon"
+Nationality = "Italy"
+Position = "Goalkeeper"
+
+[[rows]]
+DOB = "Mar 16,1990 (29)"
+KitNumber = 31
+Name = "Carlo Pinsoglio"
+Nationality = "Italy"
+Position = "Goalkeeper"
+
+[[rows]]
+DOB = "Aug 12,1999 (20)"
+KitNumber = 4
+Name = "Matthijs de Ligt"
+Nationality = "Netherlands"
+Position = "Centre-Back"
+
+[[rows]]
+DOB = "May 1,1987 (32)"
+KitNumber = 19
+Name = "Leonardo Bonucci"
+Nationality = "Italy"
+Position = "Centre-Back"
+
+[[rows]]
+DOB = "Jul 29,1994 (25)"
+KitNumber = 24
+Name = "Daniele Rugani"
+Nationality = "Italy"
+Position = "Centre-Back"
+
+[[rows]]
+DOB = "Mar 5,1998 (21)"
+KitNumber = 28
+Name = "Merih Demiral"
+Nationality = "Turkey"
+Position = "Centre-Back"
+
+[[rows]]
+DOB = "Aug 14,1984 (35)"
+KitNumber = 3
+Name = "Giorgio Chiellini"
+Nationality = "Italy"
+Position = "Centre-Back"
+
+[[rows]]
+DOB = "Jan 26,1991 (28)"
+KitNumber = 12
+Name = "Alex Sandro"
+Nationality = "Brazil"
+Position = "Left-Back"
+
+[[rows]]
+DOB = "Jul 15,1991 (28)"
+KitNumber = 13
+Name = "Danilo"
+Nationality = "Brazil"
+Position = "Right-Back"
+
+[[rows]]
+DOB = "Oct 20,1992 (27)"
+KitNumber = 2
+Name = "Mattia De Sciglio"
+Nationality = "Italy"
+Position = "Right-Back"
+
+[[rows]]
+DOB = "Jan 12,1994 (25)"
+KitNumber = 23
+Name = "Emre Can"
+Nationality = "Germany"
+Position = "Defensive Midfield"
+
+[[rows]]
+DOB = "Apr 2,1990 (29)"
+KitNumber = 5
+Name = "Miralem Pjanic"
+Nationality = "Bosnia-Herzegovina"
+Position = "Central Midfield"
+
+[[rows]]
+DOB = "Dec 26,1990 (28)"
+KitNumber = 8
+Name = "Aaron Ramsey"
+Nationality = "Wales"
+Position = "Central Midfield"
+
+[[rows]]
+DOB = "Apr 3,1995 (24)"
+KitNumber = 25
+Name = "Adrien Rabiot"
+Nationality = "France"
+Position = "Central Midfield"
+
+[[rows]]
+DOB = "Jun 25,1997 (22)"
+KitNumber = 30
+Name = "Rodrigo Bentancur"
+Nationality = "Uruguay"
+Position = "Central Midfield"
+
+[[rows]]
+DOB = "Apr 9,1987 (32)"
+KitNumber = 14
+Name = "Blaise Matuidi"
+Nationality = "France"
+Position = "Central Midfield"
+
+[[rows]]
+DOB = "Apr 4,1987 (32)"
+KitNumber = 6
+Name = "Sami Khedira"
+Nationality = "Germany"
+Position = "Central Midfield"
+
+[[rows]]
+DOB = "Feb 5,1985 (34)"
+KitNumber = 7
+Name = "Cristiano Ronaldo"
+Nationality = "Portugal"
+Position = "Left Winger"
+
+[[rows]]
+DOB = "May 6,1995 (24)"
+KitNumber = 15
+Name = "Marko Pjaca"
+Nationality = "Croatia"
+Position = "Left Winger"
+
+[[rows]]
+DOB = "Feb 16,1994 (25)"
+KitNumber = 33
+Name = "Federico Bernardeschi"
+Nationality = "Italy"
+Position = "Right Winger"
+
+[[rows]]
+DOB = "Sep 14,1990 (29)"
+KitNumber = 11
+Name = "Douglas Costa"
+Nationality = "Brazil"
+Position = "Right Winger"
+
+[[rows]]
+DOB = "May 26,1988 (31)"
+KitNumber = 16
+Name = "Juan Cuadrado"
+Nationality = "Colombia"
+Position = "Right Winger"
+
+[[rows]]
+DOB = "Nov 15,1993 (25)"
+KitNumber = 10
+Name = "Paulo Dybala"
+Nationality = "Argentina"
+Position = "Second Striker"
+
+[[rows]]
+DOB = "Dec 10,1987 (31)"
+KitNumber = 21
+Name = "Gonzalo Higuaín"
+Nationality = "Argentina"
+Position = "Centre-Forward"
+
+[[rows]]
+DOB = "May 21,1986 (33)"
+KitNumber = 17
+Name = "Mario Mandzukic"
+Nationality = "Croatia"
+Position = "Centre-Forward"

@@ -40,19 +40,19 @@ pub fn render_file_list(f: &mut Frame, app: &mut App, area: Rect) {
         .files()
         .iter()
         .map(|file| {
-            if file.name() == "../" {
+            if file.name == "../" {
                 let line = Line::from(vec![
                     Span::styled("↩ ".to_string(), Color::Yellow),
                     Span::raw(".."),
                 ]);
                 ListItem::new(line)
             } else {
-                let icon_data = FileIcon::from(file.path());
+                let icon_data = FileIcon::from(file.path.clone());
                 let icon_color = utils::hex_to_color(icon_data.color);
 
                 // 判断是否为高亮文件 (目录或 CSV)
                 let is_highlight =
-                    file.is_dir() || file.path().extension().is_some_and(|ext| ext == "csv");
+                    file.is_dir || file.path.extension().is_some_and(|ext| ext == "csv");
 
                 let text_style = if is_highlight {
                     Style::default()
@@ -62,7 +62,7 @@ pub fn render_file_list(f: &mut Frame, app: &mut App, area: Rect) {
 
                 let line = Line::from(vec![
                     Span::styled(format!("{} ", icon_data.icon), icon_color),
-                    Span::styled(file.name(), text_style),
+                    Span::styled(file.name.clone(), text_style),
                 ]);
                 ListItem::new(line)
             }
@@ -103,11 +103,11 @@ pub fn render_preview(f: &mut Frame, app: &mut App, area: Rect) {
         // 获取当前选中文件的路径来进行语法高亮
         if let Some(file) = app.explorer.files().get(app.explorer.selected_idx()) {
             if file.is_file()
-                && app.preview_path.as_ref() == Some(&file.path().to_path_buf())
+                && app.preview_path.as_ref() == Some(&file.path.to_path_buf())
                 && app.preview_cache_valid
             {
                 // 只在文件路径匹配且缓存有效时执行高亮
-                utils::highlight_code(&app.preview_cache, file.path())
+                utils::highlight_code(&app.preview_cache, &file.path)
             } else {
                 // 目录或其他特殊文件，不应用高亮
                 app.preview_cache
