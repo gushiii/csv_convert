@@ -40,13 +40,12 @@ pub fn centered_rect(
         .split(popup_layout[1])[1]
 }
 
-/// CSV 转换函数
-/// input_path: 输入文件路径
-/// target_ext: 目标文件扩展名
-/// 返回转换后的字符串
-pub fn convert_csv(input_path: &Path, target_ext: &str) -> Result<String, Box<dyn Error>> {
-    let file = std::fs::File::open(input_path)?;
-    let reader = BufReader::new(file);
+/// 清理并解析CSV内容，返回清理后的CSV字符串和表头
+/// content: CSV内容（可以来自文件或字符串）
+/// 返回 (cleaned_csv, headers)
+fn parse_csv_cleaned_content(content: &str) -> Result<(String, Vec<String>), Box<dyn Error>> {
+    // 清理CSV行：去除每个字段的前后空格
+    let reader = BufReader::new(content.as_bytes());
     let mut cleaned_csv = String::new();
 
     for line in reader.lines() {
@@ -60,6 +59,35 @@ pub fn convert_csv(input_path: &Path, target_ext: &str) -> Result<String, Box<dy
         cleaned_csv.push('\n');
     }
 
+    // 解析CSV并提取表头
+    let mut reader = csv::ReaderBuilder::new()
+        .flexible(true)
+        .trim(csv::Trim::All)
+        .quoting(true)
+        .double_quote(true)
+        .from_reader(Cursor::new(cleaned_csv.clone()));
+
+    let headers: Vec<String> = reader
+        .headers()?
+        .iter()
+        .map(|h| h.trim().to_string())
+        .collect();
+
+    Ok((cleaned_csv, headers))
+}
+
+/// CSV 转换函数
+/// input_path: 输入文件路径
+/// target_ext: 目标文件扩展名
+/// 返回转换后的字符串
+pub fn convert_csv(input_path: &Path, target_ext: &str) -> Result<String, Box<dyn Error>> {
+    let mut file = std::fs::File::open(input_path)?;
+    let mut file_content = String::new();
+    use std::io::Read;
+    file.read_to_string(&mut file_content)?;
+
+    let (cleaned_csv, headers) = parse_csv_cleaned_content(&file_content)?;
+
     let mut reader = csv::ReaderBuilder::new()
         .flexible(true)
         .trim(csv::Trim::All)
@@ -68,12 +96,6 @@ pub fn convert_csv(input_path: &Path, target_ext: &str) -> Result<String, Box<dy
         .from_reader(Cursor::new(cleaned_csv));
 
     let mut data = Vec::new();
-
-    let headers: Vec<String> = reader
-        .headers()?
-        .iter()
-        .map(|h| h.trim().to_string())
-        .collect();
 
     for result in reader.records() {
         let record = result?;
@@ -326,42 +348,28 @@ pub fn highlight_code(content: &str, file_path: &Path) -> Vec<Line<'static>> {
 pub fn render_csv_as_table(content: &str) -> Vec<Line<'static>> {
     use std::cmp;
 
-    // let file = std::fs::File::open(input_path)?;
-    let reader = BufReader::new(content.as_bytes());
-    let mut cleaned_csv = String::new();
-
-    for line in reader.lines() {
-        let line = line.unwrap_or_default();
-        let cleaned_line = line
-            .split(',')
-            .map(|s| s.trim())
-            .collect::<Vec<_>>()
-            .join(",");
-        cleaned_csv.push_str(&cleaned_line);
-        cleaned_csv.push('\n');
-    }
-
     let mut lines = Vec::new();
 
-    // 尝试解析CSV内容
-    // let mut reader = csv::ReaderBuilder::new()
-    //     .has_headers(true)
-    //     .from_reader(content.as_bytes());
+    // 使用共享的CSV清理和解析函数
+    let (cleaned_csv, headers) = match parse_csv_cleaned_content(content) {
+        Ok((csv, h)) => (csv, h),
+        Err(_) => {
+            // 如果无法解析表头，回退到原始文本显示
+            return content.lines().map(|line| Line::from(line.to_string())).collect();
+        }
+    };
+
+    if headers.is_empty() {
+        return vec![Line::from("CSV文件为空或格式错误")];
+    }
+
+    // 创建CSV Reader用于读取数据行
     let mut reader = csv::ReaderBuilder::new()
         .flexible(true)
         .trim(csv::Trim::All)
         .quoting(true)
         .double_quote(true)
         .from_reader(Cursor::new(cleaned_csv));
-
-    // 获取表头
-    let headers = match reader.headers() {
-        Ok(h) => h.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
-        Err(_) => {
-            // 如果无法解析表头，回退到原始文本显示
-            return content.lines().map(|line| Line::from(line.to_string())).collect();
-        }
-    };
 
     if headers.is_empty() {
         return vec![Line::from("CSV文件为空或格式错误")];
