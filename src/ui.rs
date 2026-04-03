@@ -8,7 +8,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
-use std::path::PathBuf;
+use std::path::Path;
 
 pub fn ui(f: &mut Frame, app: &mut App) {
     // 1. 垂直布局：主内容区 + 底部状态栏
@@ -52,7 +52,7 @@ pub fn render_file_list(f: &mut Frame, app: &mut App, area: Rect) {
 
                 // 判断是否为高亮文件 (目录或 CSV)
                 let is_highlight =
-                    file.is_dir() || file.path().extension().map_or(false, |ext| ext == "csv");
+                    file.is_dir() || file.path().extension().is_some_and(|ext| ext == "csv");
 
                 let text_style = if is_highlight {
                     Style::default()
@@ -101,23 +101,24 @@ pub fn render_preview(f: &mut Frame, app: &mut App, area: Rect) {
         vec![Line::from("  正在加载中...")]
     } else {
         // 获取当前选中文件的路径来进行语法高亮
-        let highlighted_lines =
-            if let Some(file) = app.explorer.files().get(app.explorer.selected_idx()) {
-                if file.is_file() && app.preview_path.as_ref() == Some(&file.path().to_path_buf()) && app.preview_cache_valid {
-                    // 只在文件路径匹配且缓存有效时执行高亮
-                    utils::highlight_code(&app.preview_cache, file.path())
-                } else {
-                    // 目录或其他特殊文件，不应用高亮
-                    app.preview_cache
-                        .lines()
-                        .map(|line| Line::from(line.to_string()))
-                        .collect()
-                }
+        if let Some(file) = app.explorer.files().get(app.explorer.selected_idx()) {
+            if file.is_file()
+                && app.preview_path.as_ref() == Some(&file.path().to_path_buf())
+                && app.preview_cache_valid
+            {
+                // 只在文件路径匹配且缓存有效时执行高亮
+                utils::highlight_code(&app.preview_cache, file.path())
             } else {
-                // 没有选中文件时，显示加载提示
-                vec![Line::from("  正在加载中...")]
-            };
-        highlighted_lines
+                // 目录或其他特殊文件，不应用高亮
+                app.preview_cache
+                    .lines()
+                    .map(|line| Line::from(line.to_string()))
+                    .collect()
+            }
+        } else {
+            // 没有选中文件时，显示加载提示
+            vec![Line::from("  正在加载中...")]
+        }
     };
 
     let total_lines = preview_content.len();
@@ -187,7 +188,7 @@ pub fn render_naming_input(f: &mut Frame, app: &mut App) {
     f.set_cursor_position((area.x + app.input.visual_cursor() as u16 + 1, area.y + 1));
 }
 
-pub fn render_confirm_overwrite(f: &mut Frame, dest: &PathBuf) {
+pub fn render_confirm_overwrite(f: &mut Frame, dest: &Path) {
     let area = utils::centered_rect(40, 20, f.area());
     f.render_widget(Clear, area);
     let msg = vec![

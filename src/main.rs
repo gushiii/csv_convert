@@ -40,7 +40,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 启用原始模式，禁用规范输入处理
     crossterm::terminal::enable_raw_mode()?;
     let mut stdout = std::io::stdout();
-    
+
     // 进入交替屏幕缓冲区
     crossterm::execute!(stdout, crossterm::terminal::EnterAlternateScreen)?;
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout))?;
@@ -52,17 +52,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         // 绘制UI
         terminal.draw(|f| ui::ui(f, &mut app))?;
-        
+
         // 更新应用定时器
         app.update_tick();
 
         // 以50毫秒的间隔检查事件
-        if event::poll(std::time::Duration::from_millis(50))? {
-            if let Event::Key(key) = event::read()? {
-                // 处理键盘事件，如果返回true则退出
-                if app.handle_event(&Event::Key(key))? {
-                    break;
-                }
+        if event::poll(std::time::Duration::from_millis(50))?
+            && let Event::Key(key) = event::read()?
+        {
+            // 处理键盘事件，如果返回true则退出
+            if app.handle_event(&Event::Key(key))? {
+                break;
             }
         }
     }
