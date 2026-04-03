@@ -1,4 +1,4 @@
-use ratatui::style::Color;
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use std::collections::HashMap;
 use std::error::Error;
@@ -267,6 +267,13 @@ fn validate_and_convert_to_string(data: &[u8]) -> Result<String, Box<dyn Error>>
 /// file_path: 文件路径（用于推断语言）
 /// 返回 ratatui Line 向量
 pub fn highlight_code(content: &str, file_path: &Path) -> Vec<Line<'static>> {
+    // 特殊处理CSV文件：渲染为表格格式
+    if let Some(ext) = file_path.extension() {
+        if ext == "csv" {
+            return render_csv_as_table(content);
+        }
+    }
+
     let ps = get_syntax_set();
     let ts = get_theme_set();
     let theme = &ts.themes["Solarized (dark)"];
@@ -308,6 +315,182 @@ pub fn highlight_code(content: &str, file_path: &Path) -> Vec<Line<'static>> {
             }
         };
         lines.push(highlighted);
+    }
+
+    lines
+}
+
+/// 将CSV内容渲染为美观的表格格式
+/// content: CSV文件内容
+/// 返回 ratatui Line 向量，模拟表格显示
+pub fn render_csv_as_table(content: &str) -> Vec<Line<'static>> {
+    use std::cmp;
+
+    // let file = std::fs::File::open(input_path)?;
+    let reader = BufReader::new(content.as_bytes());
+    let mut cleaned_csv = String::new();
+
+    for line in reader.lines() {
+        let line = line.unwrap_or_default();
+        let cleaned_line = line
+            .split(',')
+            .map(|s| s.trim())
+            .collect::<Vec<_>>()
+            .join(",");
+        cleaned_csv.push_str(&cleaned_line);
+        cleaned_csv.push('\n');
+    }
+
+    let mut lines = Vec::new();
+
+    // 尝试解析CSV内容
+    // let mut reader = csv::ReaderBuilder::new()
+    //     .has_headers(true)
+    //     .from_reader(content.as_bytes());
+    let mut reader = csv::ReaderBuilder::new()
+        .flexible(true)
+        .trim(csv::Trim::All)
+        .quoting(true)
+        .double_quote(true)
+        .from_reader(Cursor::new(cleaned_csv));
+
+    // 获取表头
+    let headers = match reader.headers() {
+        Ok(h) => h.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+        Err(_) => {
+            // 如果无法解析表头，回退到原始文本显示
+            return content.lines().map(|line| Line::from(line.to_string())).collect();
+        }
+    };
+
+    if headers.is_empty() {
+        return vec![Line::from("CSV文件为空或格式错误")];
+    }
+
+    // 读取所有记录，限制最多显示50行
+    let mut records = Vec::new();
+    for (i, result) in reader.records().enumerate() {
+        if i >= 50 { // 限制显示行数
+            break;
+        }
+        if let Ok(record) = result {
+            records.push(record.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+        }
+    }
+
+    if records.is_empty() {
+        return vec![Line::from("CSV文件无数据行")];
+    }
+
+    // 计算每列的最大宽度
+    let mut column_widths = vec![0; headers.len()];
+    for (i, header) in headers.iter().enumerate() {
+        column_widths[i] = cmp::max(column_widths[i], header.len());
+    }
+    for record in &records {
+        for (i, field) in record.iter().enumerate() {
+            if i < column_widths.len() {
+                column_widths[i] = cmp::max(column_widths[i], field.len());
+            }
+        }
+    }
+
+    // 限制列宽，避免表格过宽
+    for width in &mut column_widths {
+        *width = cmp::min(*width, 25); // 最大25个字符
+    }
+
+    // 创建表格边框样式
+    let border_color = Color::Indexed(244); // 灰色
+    let header_color = Color::Cyan;
+    let data_color = Color::White;
+
+    // 渲染表头
+    let mut header_line = Vec::new();
+    header_line.push(Span::styled("┌", border_color));
+    for (i, (header, &width)) in headers.iter().zip(&column_widths).enumerate() {
+        let padded_header = format!(" {:<width$} ", header, width = width);
+        header_line.push(Span::styled(padded_header, Style::default().fg(header_color).add_modifier(Modifier::BOLD)));
+        if i < headers.len() - 1 {
+            header_line.push(Span::styled("│", border_color));
+        }
+    }
+    header_line.push(Span::styled("┐", border_color));
+    lines.push(Line::from(header_line));
+
+    // 渲染分隔线
+    let mut separator_line = Vec::new();
+    separator_line.push(Span::styled("├", border_color));
+    for (i, &width) in column_widths.iter().enumerate() {
+        separator_line.push(Span::styled("─".repeat(width + 2), border_color));
+        if i < column_widths.len() - 1 {
+            separator_line.push(Span::styled("┼", border_color));
+        }
+    }
+    separator_line.push(Span::styled("┤", border_color));
+    lines.push(Line::from(separator_line));
+
+    // 渲染数据行
+    for (row_idx, record) in records.iter().enumerate() {
+        let mut data_line = Vec::new();
+        data_line.push(Span::styled("│", border_color));
+
+        for (i, field) in record.iter().enumerate() {
+            if i < column_widths.len() {
+                let width = column_widths[i];
+                // 截断过长的字段
+                let display_field = if field.len() > width {
+                    format!("{}…", &field[..width.saturating_sub(1)])
+                } else {
+                    field.clone()
+                };
+                let padded_field = format!(" {:<width$} ", display_field, width = width);
+                data_line.push(Span::styled(padded_field, Style::default().fg(data_color)));
+            }
+            if i < record.len().saturating_sub(1) {
+                data_line.push(Span::styled("│", border_color));
+            }
+        }
+
+        data_line.push(Span::styled("│", border_color));
+        lines.push(Line::from(data_line));
+
+        // 每行添加分隔线（除最后一行外）
+        if row_idx < records.len() - 1 {
+            let mut mid_separator = Vec::new();
+            mid_separator.push(Span::styled("├", border_color));
+            for (i, &width) in column_widths.iter().enumerate() {
+                mid_separator.push(Span::styled("─".repeat(width + 2), border_color));
+                if i < column_widths.len() - 1 {
+                    mid_separator.push(Span::styled("┼", border_color));
+                }
+            }
+            mid_separator.push(Span::styled("┤", border_color));
+            lines.push(Line::from(mid_separator));
+        }
+    }
+
+    // 渲染表格底部
+    let mut bottom_line = Vec::new();
+    bottom_line.push(Span::styled("└", border_color));
+    for (i, &width) in column_widths.iter().enumerate() {
+        bottom_line.push(Span::styled("─".repeat(width + 2), border_color));
+        if i < column_widths.len() - 1 {
+            bottom_line.push(Span::styled("┴", border_color));
+        }
+    }
+    bottom_line.push(Span::styled("┘", border_color));
+    lines.push(Line::from(bottom_line));
+
+    // 添加统计信息
+    let total_rows = records.len();
+    let total_cols = headers.len();
+    lines.push(Line::from(""));
+    lines.push(Line::from(format!("📊 表格信息: {} 行 × {} 列", total_rows, total_cols)));
+
+    // 如果记录被截断，显示提示
+    if records.len() >= 50 {
+        lines.push(Line::from("⚠️  显示已限制为前50行"));
     }
 
     lines

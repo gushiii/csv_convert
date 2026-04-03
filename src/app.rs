@@ -40,8 +40,8 @@ pub struct App {
     pub preview_cache: String,
     pub preview_scroll: u16,
     pub preview_path: Option<PathBuf>, // 缓存当前预览的文件路径
-    pub preview_request_id: u64, // 当前预览请求的ID
-    pub preview_cache_valid: bool, // 缓存内容是否有效
+    pub preview_request_id: u64,       // 当前预览请求的ID
+    pub preview_cache_valid: bool,     // 缓存内容是否有效
     pub preview_rx: Receiver<(u64, String)>, // 接收 (request_id, content)
     pub preview_tx: Sender<(u64, PathBuf)>, // 发送 (request_id, path)
     pub input: Input,
@@ -271,6 +271,7 @@ impl App {
                             let path = self.explorer.cwd().to_path_buf();
                             self.explorer.set_cwd(path)?;
                             self.state = AppState::Browsing;
+                            self.request_preview();
                         }
                         Err(e) => self.state = AppState::Error(e),
                     }
@@ -298,6 +299,7 @@ impl App {
                         let path = self.explorer.cwd().to_path_buf();
                         self.explorer.set_cwd(path)?;
                         self.state = AppState::Browsing;
+                        self.request_preview();
                     }
                     Err(e) => self.state = AppState::Error(e),
                 }
