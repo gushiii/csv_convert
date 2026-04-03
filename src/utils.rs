@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::io::{BufRead, BufReader, Cursor};
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use syntect::easy::HighlightLines;
 use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
@@ -174,13 +175,100 @@ fn syntect_color_to_ratatui(color: syntect::highlighting::Color) -> Color {
     Color::Rgb(color.r, color.g, color.b)
 }
 
+/// 全局语法集合缓存
+fn get_syntax_set() -> &'static SyntaxSet {
+    static SYNTAX_SET: OnceLock<SyntaxSet> = OnceLock::new();
+    SYNTAX_SET.get_or_init(SyntaxSet::load_defaults_newlines)
+}
+
+/// 全局主题集合缓存
+fn get_theme_set() -> &'static ThemeSet {
+    static THEME_SET: OnceLock<ThemeSet> = OnceLock::new();
+    THEME_SET.get_or_init(ThemeSet::load_defaults)
+}
+
+/// 限制大小读取文件内容
+/// path: 文件路径
+/// max_size: 最大读取字节数
+/// 返回读取的文件内容，如果超过大小则截断
+pub fn read_file_limited(path: &Path, max_size: u64) -> Result<String, Box<dyn Error>> {
+    use memmap2::MmapOptions;
+    use std::fs::File;
+
+    let file = File::open(path)?;
+    let file_size = file.metadata()?.len();
+    let read_size = std::cmp::min(file_size, max_size);
+
+    // 对于小文件，使用传统读取
+    if read_size <= 64 * 1024 {
+        // 预分配并清空缓冲区，确保内存被正确管理
+        let mut buffer = Vec::with_capacity(read_size as usize);
+        buffer.resize(read_size as usize, 0);
+        buffer.clear(); // 清空以确保干净的状态
+        buffer.resize(read_size as usize, 0);
+
+        let mut file = File::open(path)?;
+        use std::io::Read;
+        file.read_exact(&mut buffer)?;
+
+        let result = validate_and_convert_to_string(&buffer);
+
+        // 读取完成后清空缓冲区，释放内存
+        buffer.clear();
+        drop(buffer);
+
+        return result;
+    }
+
+    // 对于大文件，使用内存映射
+    let mmap = unsafe {
+        MmapOptions::new()
+            .len(read_size as usize)
+            .map(&file)?
+    };
+
+    let result = validate_and_convert_to_string(&mmap);
+
+    // 内存映射会在作用域结束时自动释放
+    drop(mmap);
+
+    result
+}
+
+/// 验证数据并转换为UTF-8字符串
+/// 改进的二进制文件检测：检查控制字符比例和可打印字符比例
+fn validate_and_convert_to_string(data: &[u8]) -> Result<String, Box<dyn Error>> {
+    // 快速检查：包含空字节的一定是二进制文件
+    if data.iter().any(|&b| b == 0) {
+        return Err("(可能是二进制文件)".into());
+    }
+
+    // 计算可打印字符比例
+    let printable_count = data.iter().filter(|&&b| {
+        b.is_ascii_alphanumeric() || b.is_ascii_whitespace() || 
+        b.is_ascii_punctuation() || b == b'\n' || b == b'\r' || b == b'\t'
+    }).count();
+
+    let printable_ratio = printable_count as f64 / data.len() as f64;
+
+    // 如果可打印字符比例太低，可能是二进制文件
+    if printable_ratio < 0.8 && data.len() > 100 {
+        return Err("(可能是二进制文件)".into());
+    }
+
+    // 尝试转换为UTF-8
+    String::from_utf8(data.to_vec())
+        .map_err(|_| "文件包含无效的 UTF-8 字符".into())
+}
+
+
 /// 对源代码进行语法高亮
 /// content: 源代码内容
 /// file_path: 文件路径（用于推断语言）
 /// 返回 ratatui Line 向量
 pub fn highlight_code(content: &str, file_path: &Path) -> Vec<Line<'static>> {
-    let ps = SyntaxSet::load_defaults_newlines();
-    let ts = ThemeSet::load_defaults();
+    let ps = get_syntax_set();
+    let ts = get_theme_set();
     let theme = &ts.themes["Solarized (dark)"];
 
     // 根据文件扩展名推断语言
@@ -197,10 +285,10 @@ pub fn highlight_code(content: &str, file_path: &Path) -> Vec<Line<'static>> {
         .unwrap_or_else(|| ps.find_syntax_plain_text());
 
     let mut highlighter = HighlightLines::new(syntax, theme);
-    let mut lines = Vec::new();
+    let mut lines = Vec::with_capacity(content.lines().count());
 
     for line_content in LinesWithEndings::from(content) {
-        let highlighted = match highlighter.highlight_line(line_content, &ps) {
+        let highlighted = match highlighter.highlight_line(line_content, ps) {
             Ok(regions) => {
                 let spans: Vec<Span> = regions
                     .into_iter()

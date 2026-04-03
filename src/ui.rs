@@ -93,31 +93,30 @@ pub fn render_file_list(f: &mut Frame, app: &mut App, area: Rect) {
 /// 新增：渲染预览窗格
 pub fn render_preview(f: &mut Frame, app: &mut App, area: Rect) {
     // 从 app 中获取异步加载好的预览文本
-    // 如果正在加载或为空，可以显示提示
-    let preview_content = if app.preview_cache.is_empty() {
-        vec![Line::from("  正在加载或无法预览该文件...")]
+    let preview_content = if app.preview_path.is_none() {
+        // 初始状态：还没有选择过任何文件
+        vec![Line::from("  请选择一个文件进行预览...")]
+    } else if app.preview_cache.is_empty() || !app.preview_cache_valid {
+        // 正在加载状态：已经选择了文件但内容还没准备好
+        vec![Line::from("  正在加载中...")]
     } else {
         // 获取当前选中文件的路径来进行语法高亮
-        let highlighted_lines = if let Some(file) = app
-            .explorer
-            .files()
-            .get(app.explorer.selected_idx())
-        {
-            if file.is_file() {
-                utils::highlight_code(&app.preview_cache, file.path())
+        let highlighted_lines =
+            if let Some(file) = app.explorer.files().get(app.explorer.selected_idx()) {
+                if file.is_file() && app.preview_path.as_ref() == Some(&file.path().to_path_buf()) && app.preview_cache_valid {
+                    // 只在文件路径匹配且缓存有效时执行高亮
+                    utils::highlight_code(&app.preview_cache, file.path())
+                } else {
+                    // 目录或其他特殊文件，不应用高亮
+                    app.preview_cache
+                        .lines()
+                        .map(|line| Line::from(line.to_string()))
+                        .collect()
+                }
             } else {
-                // 目录或其他特殊文件，不应用高亮
-                app.preview_cache
-                    .lines()
-                    .map(|line| Line::from(line.to_string()))
-                    .collect()
-            }
-        } else {
-            app.preview_cache
-                .lines()
-                .map(|line| Line::from(line.to_string()))
-                .collect()
-        };
+                // 没有选中文件时，显示加载提示
+                vec![Line::from("  正在加载中...")]
+            };
         highlighted_lines
     };
 
