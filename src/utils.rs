@@ -1,8 +1,13 @@
 use ratatui::style::Color;
+use ratatui::text::{Line, Span};
 use std::collections::HashMap;
 use std::error::Error;
 use std::io::{BufRead, BufReader, Cursor};
 use std::path::{Path, PathBuf};
+use syntect::easy::HighlightLines;
+use syntect::highlighting::ThemeSet;
+use syntect::parsing::SyntaxSet;
+use syntect::util::LinesWithEndings;
 
 /// 辅助函数: 计算居中矩形
 /// percent_x: 水平方向占比（0-100）
@@ -162,4 +167,60 @@ pub fn format_path(path: &std::path::Path) -> String {
         }
     }
     path_str.into_owned()
+}
+
+/// 将 syntect 的高亮颜色值转换为 ratatui Color
+fn syntect_color_to_ratatui(color: syntect::highlighting::Color) -> Color {
+    Color::Rgb(color.r, color.g, color.b)
+}
+
+/// 对源代码进行语法高亮
+/// content: 源代码内容
+/// file_path: 文件路径（用于推断语言）
+/// 返回 ratatui Line 向量
+pub fn highlight_code(content: &str, file_path: &Path) -> Vec<Line<'static>> {
+    let ps = SyntaxSet::load_defaults_newlines();
+    let ts = ThemeSet::load_defaults();
+    let theme = &ts.themes["Solarized (dark)"];
+
+    // 根据文件扩展名推断语言
+    let syntax = ps
+        .find_syntax_for_file(file_path)
+        .ok()
+        .flatten()
+        .or_else(|| {
+            // 如果无法推断，尝试根据扩展名简单匹配
+            let ext = file_path.extension()?;
+            let ext_str = ext.to_str()?;
+            ps.find_syntax_by_extension(ext_str)
+        })
+        .unwrap_or_else(|| ps.find_syntax_plain_text());
+
+    let mut highlighter = HighlightLines::new(syntax, theme);
+    let mut lines = Vec::new();
+
+    for line_content in LinesWithEndings::from(content) {
+        let highlighted = match highlighter.highlight_line(line_content, &ps) {
+            Ok(regions) => {
+                let spans: Vec<Span> = regions
+                    .into_iter()
+                    .map(|(style, text)| {
+                        let color = syntect_color_to_ratatui(style.foreground);
+                        Span::styled(
+                            text.replace('\n', ""),
+                            ratatui::style::Style::default().fg(color),
+                        )
+                    })
+                    .collect();
+                Line::from(spans)
+            }
+            Err(_) => {
+                // 如果高亮失败，降级为无高亮
+                Line::from(line_content.replace('\n', ""))
+            }
+        };
+        lines.push(highlighted);
+    }
+
+    lines
 }
